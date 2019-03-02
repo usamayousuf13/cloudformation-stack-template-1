@@ -1,0 +1,89 @@
+{
+  "Parameters": {
+    "emailAddress": {
+      "Description": "Enter your Email Address Where you want to receive notifications",
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "createSnsTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": { "Ref": "emailAddress" },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+
+    "TopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [{ "Ref": "createSnsTopic" }],
+        "PolicyDocument": {
+          "Version": "2008-10-17",
+          "Id": "__default_policy_ID",
+          "Statement": [
+            {
+              "Sid": "__default_statement_ID",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Action": [
+                "SNS:GetTopicAttributes",
+                "SNS:SetTopicAttributes",
+                "SNS:AddPermission",
+                "SNS:RemovePermission",
+                "SNS:DeleteTopic",
+                "SNS:Subscribe",
+                "SNS:ListSubscriptionsByTopic",
+                "SNS:Publish",
+                "SNS:Receive"
+              ],
+              "Resource": { "Ref": "createSnsTopic" },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceOwner": { "Ref": "AWS::AccountId" }
+                }
+              }
+            },
+            {
+              "Sid": "TrustCWEToPublishEventsToMyTopic",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": { "Ref": "createSnsTopic" }
+            }
+          ]
+        }
+      }
+    },
+
+    "createCloudWatch": {
+      "DependsOn": ["createSnsTopic", "TopicPolicy"],
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "EventPattern": {
+          "source": ["aws.s3"],
+          "detail-type": ["AWS API Call via CloudTrail"],
+          "detail": {
+            "eventSource": ["s3.amazonaws.com"],
+            "eventName": ["CreateBucket", "DeleteBucket"]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": { "Ref": "createSnsTopic" },
+            "Id": "cwatch-topic"
+          }
+        ]
+      }
+    }
+  }
+}
